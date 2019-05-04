@@ -33,8 +33,9 @@ void VerificationPass(const IR::Block& block) {
     for (const auto& inst : block) {
         const size_t num_args = inst.NumArgs();
         for (size_t i = 0; i < num_args; i++) {
-            if (!inst.GetArg(i).IsImmediate()) {
-                actual_uses[inst.GetArg(i).GetInst()]++;
+            const auto arg = inst.GetArg(i);
+            if (!arg.IsImmediate()) {
+                actual_uses[arg.GetInst()]++;
             }
         }
     }
