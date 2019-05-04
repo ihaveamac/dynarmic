@@ -231,7 +231,7 @@ RegAlloc::ArgumentInfo RegAlloc::GetArgumentInfo(IR::Inst* inst) {
     ArgumentInfo ret = {Argument{*this}, Argument{*this}, Argument{*this}, Argument{*this}};
     const size_t num_args = inst->NumArgs();
     for (size_t i = 0; i < num_args; i++) {
-        const IR::Value& arg = inst->GetArg(i);
+        const IR::Value arg = inst->GetArg(i);
         ret[i].value = arg;
         if (!arg.IsImmediate() && !IsValuelessType(arg.GetType())) {
             ASSERT_MSG(ValueLocation(arg.GetInst()), "argument must already been defined");
