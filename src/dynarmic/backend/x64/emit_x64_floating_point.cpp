@@ -809,6 +809,52 @@ static void EmitFPRecipEstimate(BlockOfCode& code, EmitContext& ctx, IR::Inst* i
             ctx.reg_alloc.DefineValue(inst, result);
             return;
         }
+
+        auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+
+        const Xbyak::Xmm operand = ctx.reg_alloc.UseXmm(args[0]);
+        const Xbyak::Xmm result = ctx.reg_alloc.ScratchXmm();
+        const Xbyak::Xmm value = ctx.reg_alloc.ScratchXmm();
+        [[maybe_unused]] const Xbyak::Reg32 tmp = ctx.reg_alloc.ScratchGpr().cvt32();
+
+        SharedLabel bad_values = GenSharedLabel(), end = GenSharedLabel();
+
+        code.movaps(value, operand);
+
+        code.movaps(xmm0, code.XmmBConst<fsize>(xword, fsize == 32 ? 0xFFFF8000 : 0xFFFF'F000'0000'0000));
+        code.pand(value, xmm0);
+        code.por(value, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x00004000 : 0x0000'0800'0000'0000));
+
+        // Detect NaNs, negatives, zeros, denormals and infinities
+        FCODE(ucomis)(value, code.XmmBConst<fsize>(xword, FPT(1) << FP::FPInfo<FPT>::explicit_mantissa_width));
+        code.jna(*bad_values, code.T_NEAR);
+        FCODE(ucomis)(value, code.XmmBConst<fsize>(xword, (fsize == 32 ? 0x7e800000 : 0x7fd0000000000000) - 1));
+        code.ja(*bad_values, code.T_NEAR);
+
+        ICODE(mov)(result, code.XmmBConst<fsize>(xword, FP::FPValue<FPT, false, 0, 1>()));
+        FCODE(divs)(result, value);
+
+        ICODE(padd)(result, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x00004000 : 0x0000'0800'0000'0000));
+        code.pand(result, xmm0);
+
+        code.L(*end);
+
+        ctx.deferred_emits.emplace_back([=, &code, &ctx] {
+            code.L(*bad_values);
+            code.sub(rsp, 8);
+            ABI_PushCallerSaveRegistersAndAdjustStackExcept(code, HostLocXmmIdx(result.getIdx()));
+            code.movq(code.ABI_PARAM1, operand);
+            code.mov(code.ABI_PARAM2.cvt32(), ctx.FPCR().Value());
+            code.lea(code.ABI_PARAM3, code.ptr[code.r15 + code.GetJitStateInfo().offsetof_fpsr_exc]);
+            code.CallFunction(&FP::FPRecipEstimate<FPT>);
+            code.movq(result, rax);
+            ABI_PopCallerSaveRegistersAndAdjustStackExcept(code, HostLocXmmIdx(result.getIdx()));
+            code.add(rsp, 8);
+            code.jmp(*end, code.T_NEAR);
+        });
+
+        ctx.reg_alloc.DefineValue(inst, result);
+        return;
     }
 
     auto args = ctx.reg_alloc.GetArgumentInfo(inst);
