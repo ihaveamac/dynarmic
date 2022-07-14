@@ -819,24 +819,37 @@ static void EmitFPRecipEstimate(BlockOfCode& code, EmitContext& ctx, IR::Inst* i
 
         SharedLabel bad_values = GenSharedLabel(), end = GenSharedLabel();
 
-        code.movaps(value, operand);
+        if constexpr (fsize == 32) {
+            code.cvtss2sd(value, operand);
+        } else {
+            code.movaps(value, operand);
+        }
 
-        code.movaps(xmm0, code.XmmBConst<fsize>(xword, fsize == 32 ? 0xFFFF8000 : 0xFFFF'F000'0000'0000));
+        code.movaps(xmm0, code.XmmBConst<64>(xword, 0xFFFF'F000'0000'0000));
         code.pand(value, xmm0);
-        code.por(value, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x00004000 : 0x0000'0800'0000'0000));
+        code.por(value, code.XmmBConst<64>(xword, 0x0000'0800'0000'0000));
 
-        code.movaps(result, operand);
-        code.pand(result, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x7fffffff : 0x7fff'ffff'ffff'ffff));
-        FCODE(ucomis)(result, code.XmmBConst<fsize>(xword, FPT(1) << FP::FPInfo<FPT>::explicit_mantissa_width));
-        code.jna(*bad_values, code.T_NEAR);
-        FCODE(ucomis)(result, code.XmmBConst<fsize>(xword, (fsize == 32 ? 0x7e800000 : 0x7fd0000000000000) - 1));
-        code.ja(*bad_values, code.T_NEAR);
+        if constexpr (fsize == 32) {
+            code.ucomisd(value, value);
+            code.jp(*bad_values, code.T_NEAR);
+        } else {
+            code.movaps(result, operand);
+            code.pand(result, code.XmmBConst<64>(xword, 0x7fff'ffff'ffff'ffff));
+            code.ucomisd(result, code.XmmBConst<64>(xword, u64(1) << FP::FPInfo<u64>::explicit_mantissa_width));
+            code.jna(*bad_values, code.T_NEAR);
+            code.ucomisd(result, code.XmmBConst<64>(xword, 0x7fd0000000000000 - 1));
+            code.ja(*bad_values, code.T_NEAR);
+        }
 
-        ICODE(mov)(result, code.XmmBConst<fsize>(xword, FP::FPValue<FPT, false, 0, 1>()));
-        FCODE(divs)(result, value);
+        code.movq(result, code.XmmBConst<64>(xword, FP::FPValue<u64, false, 0, 1>()));
+        code.divsd(result, value);
 
-        ICODE(padd)(result, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x00004000 : 0x0000'0800'0000'0000));
+        code.paddd(result, code.XmmBConst<64>(xword, 0x0000'0800'0000'0000));
         code.pand(result, xmm0);
+
+        if constexpr (fsize == 32) {
+            code.cvtsd2ss(result, result);
+        }
 
         code.L(*end);
 
