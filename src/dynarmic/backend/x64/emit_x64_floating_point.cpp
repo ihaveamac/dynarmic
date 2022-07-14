@@ -825,10 +825,11 @@ static void EmitFPRecipEstimate(BlockOfCode& code, EmitContext& ctx, IR::Inst* i
         code.pand(value, xmm0);
         code.por(value, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x00004000 : 0x0000'0800'0000'0000));
 
-        // Detect NaNs, negatives, zeros, denormals and infinities
-        FCODE(ucomis)(value, code.XmmBConst<fsize>(xword, FPT(1) << FP::FPInfo<FPT>::explicit_mantissa_width));
+        code.movaps(result, operand);
+        code.pand(result, code.XmmBConst<fsize>(xword, fsize == 32 ? 0x7fffffff : 0x7fff'ffff'ffff'ffff));
+        FCODE(ucomis)(result, code.XmmBConst<fsize>(xword, FPT(1) << FP::FPInfo<FPT>::explicit_mantissa_width));
         code.jna(*bad_values, code.T_NEAR);
-        FCODE(ucomis)(value, code.XmmBConst<fsize>(xword, (fsize == 32 ? 0x7e800000 : 0x7fd0000000000000) - 1));
+        FCODE(ucomis)(result, code.XmmBConst<fsize>(xword, (fsize == 32 ? 0x7e800000 : 0x7fd0000000000000) - 1));
         code.ja(*bad_values, code.T_NEAR);
 
         ICODE(mov)(result, code.XmmBConst<fsize>(xword, FP::FPValue<FPT, false, 0, 1>()));
