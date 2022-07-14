@@ -815,7 +815,6 @@ static void EmitFPRecipEstimate(BlockOfCode& code, EmitContext& ctx, IR::Inst* i
         const Xbyak::Xmm operand = ctx.reg_alloc.UseXmm(args[0]);
         const Xbyak::Xmm result = ctx.reg_alloc.ScratchXmm();
         const Xbyak::Xmm value = ctx.reg_alloc.ScratchXmm();
-        [[maybe_unused]] const Xbyak::Reg32 tmp = ctx.reg_alloc.ScratchGpr().cvt32();
 
         SharedLabel bad_values = GenSharedLabel(), end = GenSharedLabel();
 
