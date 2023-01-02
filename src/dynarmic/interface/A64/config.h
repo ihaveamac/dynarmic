@@ -203,7 +203,11 @@ struct UserConfig {
     /// Pointer to the page table which we can use for direct page table access.
     /// If an entry in page_table is null, the relevant memory callback will be called.
     /// If page_table is nullptr, all memory accesses hit the memory callbacks.
-    void** page_table = nullptr;
+    void* page_table = nullptr;
+    /// Determines structure of page_table:
+    /// false - flat single-layer page table
+    /// true - multilevel page table
+    bool page_table_is_multilevel = false;
     /// Declares how many valid address bits are there in virtual addresses.
     /// Determines the size of page_table. Valid values are between 12 and 64 inclusive.
     /// This is only used if page_table is not nullptr.

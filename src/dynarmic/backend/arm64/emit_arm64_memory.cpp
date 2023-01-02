@@ -254,25 +254,44 @@ void EmitDetectMisalignedVAddr(oaknut::CodeGenerator& code, EmitContext& ctx, oa
 template<size_t bitsize>
 std::pair<oaknut::XReg, oaknut::XReg> InlinePageTableEmitVAddrLookup(oaknut::CodeGenerator& code, EmitContext& ctx, oaknut::XReg Xaddr, const SharedLabel& fallback) {
     const size_t valid_page_index_bits = ctx.conf.page_table_address_space_bits - page_bits;
-    const size_t unused_top_bits = 64 - ctx.conf.page_table_address_space_bits;
+    const bool ignore_upper_bits = ctx.conf.silently_mirror_page_table || ctx.conf.page_table_address_space_bits == 64;
 
     EmitDetectMisalignedVAddr<bitsize>(code, ctx, Xaddr, fallback);
 
-    if (ctx.conf.silently_mirror_page_table || unused_top_bits == 0) {
-        code.UBFX(Xscratch0, Xaddr, page_bits, valid_page_index_bits);
-    } else {
+    if (!ignore_upper_bits) {
         code.LSR(Xscratch0, Xaddr, page_bits);
         code.TST(Xscratch0, u64(~u64(0)) << valid_page_index_bits);
         code.B(NE, *fallback);
     }
 
-    code.LDR(Xscratch0, Xpagetable, Xscratch0, LSL, 3);
+    if (ctx.conf.page_table_is_multilevel) {
+        constexpr size_t bits_per_level = 9;
+        const size_t num_levels = (valid_page_index_bits + bits_per_level - 1) / bits_per_level;
+        const auto level_start_bit = [&](size_t level) { return (num_levels - level - 1) * bits_per_level + page_bits; };
+
+        code.UBFX(Xscratch1, Xaddr, level_start_bit(0), ctx.conf.page_table_address_space_bits - level_start_bit(0));
+        code.LDR(Xscratch0, Xpagetable, Xscratch1, LSL, 3);
+        if (num_levels > 1) {
+            code.CBZ(Xscratch0, *fallback);
+        }
+        for (size_t level = 1; level < num_levels; level++) {
+            code.UBFX(Xscratch1, Xaddr, level_start_bit(level), bits_per_level);
+            code.LDR(Xscratch0, Xscratch0, Xscratch1, LSL, 3);
+            if (level != num_levels - 1) {
+                code.CBZ(Xscratch0, *fallback);
+            }
+        }
+    } else {
+        if (ignore_upper_bits) {
+            code.UBFX(Xscratch0, Xaddr, page_bits, valid_page_index_bits);
+        }
+        code.LDR(Xscratch0, Xpagetable, Xscratch0, LSL, 3);
+    }
 
     if (ctx.conf.page_table_pointer_mask_bits != 0) {
         const u64 mask = u64(~u64(0)) << ctx.conf.page_table_pointer_mask_bits;
         code.AND(Xscratch0, Xscratch0, mask);
     }
-
     code.CBZ(Xscratch0, *fallback);
 
     if (ctx.conf.absolute_offset_page_table) {

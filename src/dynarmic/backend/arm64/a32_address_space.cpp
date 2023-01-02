@@ -357,6 +357,7 @@ EmitConfig A32AddressSpace::GetEmitConfig() {
         .check_halt_on_memory_access = conf.check_halt_on_memory_access,
 
         .page_table_pointer = mcl::bit_cast<u64>(conf.page_table),
+        .page_table_is_multilevel = false,
         .page_table_address_space_bits = 32,
         .page_table_pointer_mask_bits = conf.page_table_pointer_mask_bits,
         .silently_mirror_page_table = true,

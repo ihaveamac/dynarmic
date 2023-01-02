@@ -121,6 +121,7 @@ struct EmitConfig {
 
     // Page table
     u64 page_table_pointer;
+    bool page_table_is_multilevel;
     size_t page_table_address_space_bits;
     int page_table_pointer_mask_bits;
     bool silently_mirror_page_table;
