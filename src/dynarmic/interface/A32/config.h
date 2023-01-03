@@ -147,9 +147,11 @@ struct UserConfig {
     // Page Table
     // The page table is used for faster memory access. If an entry in the table is nullptr,
     // the JIT will fallback to calling the MemoryRead*/MemoryWrite* callbacks.
-    static constexpr std::size_t PAGE_BITS = 12;
-    static constexpr std::size_t NUM_PAGE_TABLE_ENTRIES = 1 << (32 - PAGE_BITS);
-    std::array<std::uint8_t*, NUM_PAGE_TABLE_ENTRIES>* page_table = nullptr;
+    void* page_table = nullptr;
+    /// Determines structure of page_table:
+    /// false - flat single-layer page table
+    /// true - multilevel page table
+    bool page_table_is_multilevel = false;
     /// Determines if the pointer in the page_table shall be offseted locally or globally.
     /// 'false' will access page_table[addr >> bits][addr & mask]
     /// 'true'  will access page_table[addr >> bits][addr]
