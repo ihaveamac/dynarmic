@@ -258,6 +258,8 @@ std::pair<oaknut::XReg, oaknut::XReg> InlinePageTableEmitVAddrLookup(oaknut::Cod
 
     EmitDetectMisalignedVAddr<bitsize>(code, ctx, Xaddr, fallback);
 
+    oaknut::Label skip_other_levels;
+
     if (!ignore_upper_bits) {
         code.LSR(Xscratch0, Xaddr, page_bits);
         code.TST(Xscratch0, u64(~u64(0)) << valid_page_index_bits);
@@ -265,6 +267,8 @@ std::pair<oaknut::XReg, oaknut::XReg> InlinePageTableEmitVAddrLookup(oaknut::Cod
     }
 
     if (ctx.conf.page_table_is_multilevel) {
+        ASSERT(ctx.conf.page_table_pointer_mask_bits >= 1 && ctx.conf.absolute_offset_page_table);
+
         constexpr size_t bits_per_level = 9;
         const size_t num_levels = (valid_page_index_bits + bits_per_level - 1) / bits_per_level;
         const auto level_start_bit = [&](size_t level) { return (num_levels - level - 1) * bits_per_level + page_bits; };
@@ -272,12 +276,14 @@ std::pair<oaknut::XReg, oaknut::XReg> InlinePageTableEmitVAddrLookup(oaknut::Cod
         code.UBFX(Xscratch1, Xaddr, level_start_bit(0), ctx.conf.page_table_address_space_bits - level_start_bit(0));
         code.LDR(Xscratch0, Xpagetable, Xscratch1, LSL, 3);
         if (num_levels > 1) {
+            code.TBNZ(Xscratch0, 0, skip_other_levels);
             code.CBZ(Xscratch0, *fallback);
         }
         for (size_t level = 1; level < num_levels; level++) {
             code.UBFX(Xscratch1, Xaddr, level_start_bit(level), bits_per_level);
             code.LDR(Xscratch0, Xscratch0, Xscratch1, LSL, 3);
             if (level != num_levels - 1) {
+                code.TBNZ(Xscratch0, 0, skip_other_levels);
                 code.CBZ(Xscratch0, *fallback);
             }
         }
@@ -288,6 +294,7 @@ std::pair<oaknut::XReg, oaknut::XReg> InlinePageTableEmitVAddrLookup(oaknut::Cod
         code.LDR(Xscratch0, Xpagetable, Xscratch0, LSL, 3);
     }
 
+    code.l(skip_other_levels);
     if (ctx.conf.page_table_pointer_mask_bits != 0) {
         const u64 mask = u64(~u64(0)) << ctx.conf.page_table_pointer_mask_bits;
         code.AND(Xscratch0, Xscratch0, mask);
