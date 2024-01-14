@@ -381,12 +381,35 @@ public:
     }
 
     /**
+     * Erases all nodes from the list, after an indicated iterator.
+     * @param it The iterator that points to the last node to keep.
+     */
+    void erase_after(iterator it)
+    {
+        pointer node = &*it;
+
+        if (node == root.get())
+            return;
+
+        node->next = root.get();
+        root->prev = node;
+    }
+
+    /**
      * Exchanges contents of this list with another list instance.
      * @param other The other list to swap with.
      */
     void swap(intrusive_list& other) noexcept
     {
         root.swap(other.root);
+    }
+
+    /**
+     * Removes all nodes from a list.
+     */
+    void clear()
+    {
+        root->prev = root->next = root.get();
     }
 
 private:
