@@ -98,6 +98,19 @@ public:
      */
     iterator PrependNewInst(iterator insertion_point, Opcode op, std::initializer_list<Value> args);
 
+    /**
+     * Removes all instruction in this basic block after the erase point.
+     *
+     * @param erase_point Last instruction to keep. If std::nullopt, removes all instruction.
+     */
+    void EraseAfter(std::optional<iterator> erase_point) {
+        if (!erase_point) {
+            instructions.clear();
+            return;
+        }
+        instructions.erase_after(*erase_point);
+    }
+
     /// Gets the starting location for this basic block.
     LocationDescriptor Location() const;
     /// Gets the end location for this basic block.
