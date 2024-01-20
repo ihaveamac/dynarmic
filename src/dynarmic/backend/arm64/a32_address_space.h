@@ -25,7 +25,6 @@ protected:
     friend class A32Core;
 
     void EmitPrelude();
-    EmitConfig GetEmitConfig() override;
     void RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo& block_info) override;
 
     const A32::UserConfig conf;

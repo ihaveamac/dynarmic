@@ -24,7 +24,7 @@ namespace Dynarmic::Backend::Arm64 {
 
 class AddressSpace {
 public:
-    explicit AddressSpace(size_t code_cache_size);
+    AddressSpace(EmitConfig emit_config, size_t code_cache_size);
     virtual ~AddressSpace();
 
     virtual IR::Block GenerateIR(IR::LocationDescriptor) const = 0;
@@ -44,7 +44,6 @@ public:
     void ClearCache();
 
 protected:
-    virtual EmitConfig GetEmitConfig() = 0;
     virtual void RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo& block_info) = 0;
 
     size_t GetRemainingSize();
@@ -53,6 +52,8 @@ protected:
     void RelinkForDescriptor(IR::LocationDescriptor target_descriptor, CodePtr target_ptr);
 
     FakeCall FastmemCallback(u64 host_pc);
+
+    const EmitConfig emit_config;
 
     const size_t code_cache_size;
     oaknut::CodeBlock mem;

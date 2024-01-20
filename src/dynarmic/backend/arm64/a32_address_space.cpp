@@ -20,6 +20,54 @@
 
 namespace Dynarmic::Backend::Arm64 {
 
+static EmitConfig GetEmitConfig(const A32::UserConfig& conf) {
+    return EmitConfig{
+        .optimizations = conf.unsafe_optimizations ? conf.optimizations : conf.optimizations & all_safe_optimizations,
+
+        .hook_isb = conf.hook_isb,
+
+        .cntfreq_el0{},
+        .ctr_el0{},
+        .dczid_el0{},
+        .tpidrro_el0{},
+        .tpidr_el0{},
+
+        .check_halt_on_memory_access = conf.check_halt_on_memory_access,
+
+        .page_table_pointer = mcl::bit_cast<u64>(conf.page_table),
+        .page_table_address_space_bits = 32,
+        .page_table_pointer_mask_bits = conf.page_table_pointer_mask_bits,
+        .silently_mirror_page_table = true,
+        .absolute_offset_page_table = conf.absolute_offset_page_table,
+        .detect_misaligned_access_via_page_table = conf.detect_misaligned_access_via_page_table,
+        .only_detect_misalignment_via_page_table_on_page_boundary = conf.only_detect_misalignment_via_page_table_on_page_boundary,
+
+        .fastmem_pointer = mcl::bit_cast<u64>(conf.fastmem_pointer),
+        .recompile_on_fastmem_failure = conf.recompile_on_fastmem_failure,
+        .fastmem_address_space_bits = 32,
+        .silently_mirror_fastmem = true,
+
+        .wall_clock_cntpct = conf.wall_clock_cntpct,
+        .enable_cycle_counting = conf.enable_cycle_counting,
+
+        .always_little_endian = conf.always_little_endian,
+
+        .descriptor_to_fpcr = [](const IR::LocationDescriptor& location) { return FP::FPCR{A32::LocationDescriptor{location}.FPSCR().Value()}; },
+        .emit_cond = EmitA32Cond,
+        .emit_condition_failed_terminal = EmitA32ConditionFailedTerminal,
+        .emit_terminal = EmitA32Terminal,
+        .emit_check_memory_abort = EmitA32CheckMemoryAbort,
+
+        .state_nzcv_offset = offsetof(A32JitState, cpsr_nzcv),
+        .state_fpsr_offset = offsetof(A32JitState, fpsr),
+        .state_exclusive_state_offset = offsetof(A32JitState, exclusive_state),
+
+        .coprocessors = conf.coprocessors,
+
+        .very_verbose_debugging_output = conf.very_verbose_debugging_output,
+    };
+}
+
 template<auto mfp, typename T>
 static void* EmitCallTrampoline(oaknut::CodeGenerator& code, T* this_) {
     using namespace oaknut::util;
@@ -156,7 +204,7 @@ static void* EmitExclusiveWriteCallTrampoline(oaknut::CodeGenerator& code, const
 }
 
 A32AddressSpace::A32AddressSpace(const A32::UserConfig& conf)
-        : AddressSpace(conf.code_cache_size)
+        : AddressSpace(GetEmitConfig(conf), conf.code_cache_size)
         , conf(conf) {
     EmitPrelude();
 }
@@ -364,54 +412,6 @@ void A32AddressSpace::EmitPrelude() {
 
     mem.invalidate_all();
     mem.protect();
-}
-
-EmitConfig A32AddressSpace::GetEmitConfig() {
-    return EmitConfig{
-        .optimizations = conf.unsafe_optimizations ? conf.optimizations : conf.optimizations & all_safe_optimizations,
-
-        .hook_isb = conf.hook_isb,
-
-        .cntfreq_el0{},
-        .ctr_el0{},
-        .dczid_el0{},
-        .tpidrro_el0{},
-        .tpidr_el0{},
-
-        .check_halt_on_memory_access = conf.check_halt_on_memory_access,
-
-        .page_table_pointer = mcl::bit_cast<u64>(conf.page_table),
-        .page_table_address_space_bits = 32,
-        .page_table_pointer_mask_bits = conf.page_table_pointer_mask_bits,
-        .silently_mirror_page_table = true,
-        .absolute_offset_page_table = conf.absolute_offset_page_table,
-        .detect_misaligned_access_via_page_table = conf.detect_misaligned_access_via_page_table,
-        .only_detect_misalignment_via_page_table_on_page_boundary = conf.only_detect_misalignment_via_page_table_on_page_boundary,
-
-        .fastmem_pointer = mcl::bit_cast<u64>(conf.fastmem_pointer),
-        .recompile_on_fastmem_failure = conf.recompile_on_fastmem_failure,
-        .fastmem_address_space_bits = 32,
-        .silently_mirror_fastmem = true,
-
-        .wall_clock_cntpct = conf.wall_clock_cntpct,
-        .enable_cycle_counting = conf.enable_cycle_counting,
-
-        .always_little_endian = conf.always_little_endian,
-
-        .descriptor_to_fpcr = [](const IR::LocationDescriptor& location) { return FP::FPCR{A32::LocationDescriptor{location}.FPSCR().Value()}; },
-        .emit_cond = EmitA32Cond,
-        .emit_condition_failed_terminal = EmitA32ConditionFailedTerminal,
-        .emit_terminal = EmitA32Terminal,
-        .emit_check_memory_abort = EmitA32CheckMemoryAbort,
-
-        .state_nzcv_offset = offsetof(A32JitState, cpsr_nzcv),
-        .state_fpsr_offset = offsetof(A32JitState, fpsr),
-        .state_exclusive_state_offset = offsetof(A32JitState, exclusive_state),
-
-        .coprocessors = conf.coprocessors,
-
-        .very_verbose_debugging_output = conf.very_verbose_debugging_output,
-    };
 }
 
 void A32AddressSpace::RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo&) {

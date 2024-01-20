@@ -15,8 +15,9 @@
 
 namespace Dynarmic::Backend::Arm64 {
 
-AddressSpace::AddressSpace(size_t code_cache_size)
-        : code_cache_size(code_cache_size)
+AddressSpace::AddressSpace(EmitConfig emit_config, size_t code_cache_size)
+        : emit_config(emit_config)
+        , code_cache_size(code_cache_size)
         , mem(code_cache_size)
         , code(mem.ptr())
         , fastmem_manager(exception_handler) {
@@ -103,7 +104,7 @@ EmittedBlockInfo AddressSpace::Emit(IR::Block block) {
 
     mem.unprotect();
 
-    EmittedBlockInfo block_info = EmitArm64(code, std::move(block), GetEmitConfig(), fastmem_manager);
+    EmittedBlockInfo block_info = EmitArm64(code, std::move(block), emit_config, fastmem_manager);
 
     ASSERT(block_entries.emplace(block.Location(), block_info.entry_point).second);
     ASSERT(reverse_block_entries.emplace(block_info.entry_point, block.Location()).second);
