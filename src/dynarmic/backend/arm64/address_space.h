@@ -47,6 +47,8 @@ protected:
     virtual void RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo& block_info) = 0;
 
     size_t GetRemainingSize();
+    bool IsNearlyFull();
+    CodePtr Compile(IR::LocationDescriptor descriptor);
     EmittedBlockInfo Emit(IR::Block ir_block);
     void Link(EmittedBlockInfo& block);
     void RelinkForDescriptor(IR::LocationDescriptor target_descriptor, CodePtr target_ptr);

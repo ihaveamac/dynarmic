@@ -3,17 +3,58 @@
  * SPDX-License-Identifier: 0BSD
  */
 
+#include <list>
+#include <type_traits>
+#include <vector>
+
+#include <mcl/assert.hpp>
+
 #include "dynarmic/backend/arm64/a64_address_space.h"
 #include "dynarmic/backend/arm64/a64_jitstate.h"
 #include "dynarmic/backend/arm64/abi.h"
 #include "dynarmic/backend/arm64/devirtualize.h"
 #include "dynarmic/backend/arm64/emit_arm64.h"
 #include "dynarmic/backend/arm64/stack_layout.h"
+#include "dynarmic/common/always_false.h"
 #include "dynarmic/common/cast_util.h"
 #include "dynarmic/common/fp/fpcr.h"
+#include "dynarmic/common/variant_util.h"
 #include "dynarmic/interface/exclusive_monitor.h"
 
 namespace Dynarmic::Backend::Arm64 {
+
+namespace {
+void AppendNextBlocksToList(std::list<IR::LocationDescriptor>& next, const IR::Terminal& terminal) {
+    Common::VisitVariant<void>(terminal, [&](auto x) {
+        using T = std::decay_t<decltype(x)>;
+        if constexpr (std::is_same_v<T, IR::Term::Invalid>) {
+            ASSERT_FALSE("Invalid terminal");
+        } else if constexpr (std::is_same_v<T, IR::Term::Interpret>) {
+            // Nothing
+        } else if constexpr (std::is_same_v<T, IR::Term::ReturnToDispatch>) {
+            // Nothing
+        } else if constexpr (std::is_same_v<T, IR::Term::LinkBlock>) {
+            next.push_back(x.next);
+        } else if constexpr (std::is_same_v<T, IR::Term::LinkBlockFast>) {
+            next.push_back(x.next);
+        } else if constexpr (std::is_same_v<T, IR::Term::PopRSBHint>) {
+            // Nothing
+        } else if constexpr (std::is_same_v<T, IR::Term::FastDispatchHint>) {
+            // Nothing
+        } else if constexpr (std::is_same_v<T, IR::Term::If>) {
+            AppendNextBlocksToList(next, x.then_);
+            AppendNextBlocksToList(next, x.else_);
+        } else if constexpr (std::is_same_v<T, IR::Term::CheckBit>) {
+            AppendNextBlocksToList(next, x.then_);
+            AppendNextBlocksToList(next, x.else_);
+        } else if constexpr (std::is_same_v<T, IR::Term::CheckHalt>) {
+            AppendNextBlocksToList(next, x.else_);
+        } else {
+            static_assert(Common::always_false_v<T>);
+        }
+    });
+}
+}  // namespace
 
 AddressSpace::AddressSpace(EmitConfig emit_config, size_t code_cache_size)
         : emit_config(emit_config)
@@ -61,9 +102,11 @@ CodePtr AddressSpace::GetOrEmit(IR::LocationDescriptor descriptor) {
         return block_entry;
     }
 
-    IR::Block ir_block = GenerateIR(descriptor);
-    const EmittedBlockInfo block_info = Emit(std::move(ir_block));
-    return block_info.entry_point;
+    if (IsNearlyFull()) {
+        ClearCache();
+    }
+
+    return Compile(descriptor);
 }
 
 void AddressSpace::InvalidateBasicBlocks(const tsl::robin_set<IR::LocationDescriptor>& descriptors) {
@@ -97,13 +140,41 @@ size_t AddressSpace::GetRemainingSize() {
     return code_cache_size - (code.ptr<CodePtr>() - reinterpret_cast<CodePtr>(mem.ptr()));
 }
 
-EmittedBlockInfo AddressSpace::Emit(IR::Block block) {
-    if (GetRemainingSize() < 1024 * 1024) {
-        ClearCache();
-    }
+bool AddressSpace::IsNearlyFull() {
+    return GetRemainingSize() < 1024 * 1024;
+}
+
+CodePtr AddressSpace::Compile(IR::LocationDescriptor descriptor) {
+    const CodePtr starting_position = code.ptr<CodePtr>();
 
     mem.unprotect();
 
+    std::list<IR::LocationDescriptor> next;
+
+    const auto do_block = [this, &next](IR::LocationDescriptor descriptor) {
+        IR::Block ir_block = GenerateIR(descriptor);
+        AppendNextBlocksToList(next, ir_block.GetTerminal());
+        const EmittedBlockInfo block_info = Emit(std::move(ir_block));
+        return block_info.entry_point;
+    };
+
+    CodePtr result = do_block(descriptor);
+    if (emit_config.HasOptimization(OptimizationFlag::MultiBlockCompilation)) {
+        while (!next.empty() && !IsNearlyFull()) {
+            const IR::LocationDescriptor n = next.front();
+            next.pop_front();
+            if (!Get(n))
+                do_block(n);
+        }
+    }
+
+    mem.invalidate(reinterpret_cast<u32*>(starting_position), static_cast<size_t>(code.ptr<CodePtr>() - starting_position));
+    mem.protect();
+
+    return result;
+}
+
+EmittedBlockInfo AddressSpace::Emit(IR::Block block) {
     EmittedBlockInfo block_info = EmitArm64(code, std::move(block), emit_config, fastmem_manager);
 
     ASSERT(block_entries.emplace(block.Location(), block_info.entry_point).second);
@@ -112,9 +183,6 @@ EmittedBlockInfo AddressSpace::Emit(IR::Block block) {
 
     Link(block_info);
     RelinkForDescriptor(block.Location(), block_info.entry_point);
-
-    mem.invalidate(reinterpret_cast<u32*>(block_info.entry_point), block_info.size);
-    mem.protect();
 
     RegisterNewBasicBlock(block, block_info);
 
