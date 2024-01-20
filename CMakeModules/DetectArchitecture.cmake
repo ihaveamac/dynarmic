@@ -3,6 +3,8 @@ include(CheckSymbolExists)
 if (CMAKE_OSX_ARCHITECTURES)
     set(DYNARMIC_MULTIARCH_BUILD 1)
     set(ARCHITECTURE "${CMAKE_OSX_ARCHITECTURES}")
+    # macOS: The Haswell target is treated the same as base x64.
+    string(REPLACE "x86_64h" "x86_64" ARCHITECTURE "${ARCHITECTURE}")
     return()
 endif()
 
