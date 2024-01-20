@@ -76,6 +76,8 @@ public:
     const_reverse_iterator crbegin() const { return instructions.crbegin(); }
     const_reverse_iterator crend() const { return instructions.crend(); }
 
+    std::optional<iterator> MaybeLastInst() const { return instructions.empty() ? std::nullopt : std::optional<iterator>{--instructions.end()}; }
+
     /**
      * Appends a new instruction to the end of this basic block,
      * handling any allocations necessary to do so.
