@@ -167,7 +167,7 @@ void FlagsPass(IR::Block& block) {
             break;
         }
         default: {
-            if (inst->ReadsFromCPSR() || inst->WritesToCPSR()) {
+            if (inst->ReadsFromCPSR() || inst->WritesToCPSR() || inst->CausesCPUException() || inst->IsCoprocessorInstruction()) {
                 nzcvq = {};
                 nzcv = {};
                 nz = {};
@@ -357,7 +357,7 @@ void RegisterPass(IR::Block& block) {
             break;
         }
         default: {
-            if (inst->ReadsFromCoreRegister() || inst->WritesToCoreRegister()) {
+            if (inst->ReadsFromCoreRegister() || inst->WritesToCoreRegister() || inst->CausesCPUException() || inst->IsCoprocessorInstruction()) {
                 reg_info = {};
                 ext_reg_info = {};
             }
