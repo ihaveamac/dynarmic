@@ -10,6 +10,7 @@
 #include "dynarmic/backend/arm64/emit_arm64.h"
 #include "dynarmic/backend/arm64/emit_context.h"
 #include "dynarmic/backend/arm64/reg_alloc.h"
+#include "dynarmic/interface/A32/config.h"
 #include "dynarmic/interface/A32/coprocessor.h"
 #include "dynarmic/ir/basic_block.h"
 #include "dynarmic/ir/microinstruction.h"
@@ -19,8 +20,19 @@ namespace Dynarmic::Backend::Arm64 {
 
 using namespace oaknut::util;
 
-static void EmitCoprocessorException() {
-    ASSERT_FALSE("Should raise coproc exception here");
+static void EmitCoprocessorException(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+    ctx.reg_alloc.PrepareForCall();
+
+    const A32::LocationDescriptor current_location{IR::LocationDescriptor{args[0].GetImmediateU64()}};
+
+    code.MOV(W1, current_location.PC());
+    code.MOV(W2, static_cast<u32>(A32::Exception::InvalidCoprocessorInstruction));
+    EmitRelocation(code, ctx, LinkTarget::ExceptionRaised);
+
+    if (inst->GetType() != IR::Type::Void) {
+        ctx.reg_alloc.DefineAsRegister(inst, X0);  // Fake value.
+    }
 }
 
 static void CallCoprocCallback(oaknut::CodeGenerator& code, EmitContext& ctx, A32::Coprocessor::Callback callback, IR::Inst* inst = nullptr, std::optional<Argument::copyable_reference> arg0 = {}, std::optional<Argument::copyable_reference> arg1 = {}) {
@@ -40,7 +52,7 @@ static void CallCoprocCallback(oaknut::CodeGenerator& code, EmitContext& ctx, A3
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocInternalOperation>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const auto opc1 = static_cast<unsigned>(coproc_info[2]);
@@ -51,13 +63,13 @@ void EmitIR<IR::Opcode::A32CoprocInternalOperation>(oaknut::CodeGenerator& code,
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileInternalOperation(two, opc1, CRd, CRn, CRm, opc2);
     if (!action) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
@@ -66,8 +78,7 @@ void EmitIR<IR::Opcode::A32CoprocInternalOperation>(oaknut::CodeGenerator& code,
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocSendOneWord>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const auto opc1 = static_cast<unsigned>(coproc_info[2]);
@@ -77,24 +88,26 @@ void EmitIR<IR::Opcode::A32CoprocSendOneWord>(oaknut::CodeGenerator& code, EmitC
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileSendOneWord(two, opc1, CRn, CRm, opc2);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+
     if (const auto cb = std::get_if<A32::Coprocessor::Callback>(&action)) {
-        CallCoprocCallback(code, ctx, *cb, nullptr, args[1]);
+        CallCoprocCallback(code, ctx, *cb, nullptr, args[2]);
         return;
     }
 
     if (const auto destination_ptr = std::get_if<u32*>(&action)) {
-        auto Wvalue = ctx.reg_alloc.ReadW(args[1]);
+        auto Wvalue = ctx.reg_alloc.ReadW(args[2]);
         RegAlloc::Realize(Wvalue);
 
         code.MOV(Xscratch0, reinterpret_cast<u64>(*destination_ptr));
@@ -108,9 +121,7 @@ void EmitIR<IR::Opcode::A32CoprocSendOneWord>(oaknut::CodeGenerator& code, EmitC
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocSendTwoWords>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const auto opc = static_cast<unsigned>(coproc_info[2]);
@@ -118,25 +129,27 @@ void EmitIR<IR::Opcode::A32CoprocSendTwoWords>(oaknut::CodeGenerator& code, Emit
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileSendTwoWords(two, opc, CRm);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+
     if (const auto cb = std::get_if<A32::Coprocessor::Callback>(&action)) {
-        CallCoprocCallback(code, ctx, *cb, nullptr, args[1], args[2]);
+        CallCoprocCallback(code, ctx, *cb, nullptr, args[2], args[3]);
         return;
     }
 
     if (const auto destination_ptrs = std::get_if<std::array<u32*, 2>>(&action)) {
-        auto Wvalue1 = ctx.reg_alloc.ReadW(args[1]);
-        auto Wvalue2 = ctx.reg_alloc.ReadW(args[2]);
+        auto Wvalue1 = ctx.reg_alloc.ReadW(args[2]);
+        auto Wvalue2 = ctx.reg_alloc.ReadW(args[3]);
         RegAlloc::Realize(Wvalue1, Wvalue2);
 
         code.MOV(Xscratch0, reinterpret_cast<u64>((*destination_ptrs)[0]));
@@ -152,7 +165,7 @@ void EmitIR<IR::Opcode::A32CoprocSendTwoWords>(oaknut::CodeGenerator& code, Emit
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocGetOneWord>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
 
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
@@ -163,14 +176,14 @@ void EmitIR<IR::Opcode::A32CoprocGetOneWord>(oaknut::CodeGenerator& code, EmitCo
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileGetOneWord(two, opc1, CRn, CRm, opc2);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
@@ -194,7 +207,7 @@ void EmitIR<IR::Opcode::A32CoprocGetOneWord>(oaknut::CodeGenerator& code, EmitCo
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocGetTwoWords>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const unsigned opc = coproc_info[2];
@@ -202,14 +215,14 @@ void EmitIR<IR::Opcode::A32CoprocGetTwoWords>(oaknut::CodeGenerator& code, EmitC
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     auto action = coproc->CompileGetTwoWords(two, opc, CRm);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
@@ -236,9 +249,7 @@ void EmitIR<IR::Opcode::A32CoprocGetTwoWords>(oaknut::CodeGenerator& code, EmitC
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocLoadWords>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const bool long_transfer = coproc_info[2] != 0;
@@ -252,24 +263,23 @@ void EmitIR<IR::Opcode::A32CoprocLoadWords>(oaknut::CodeGenerator& code, EmitCon
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileLoadWords(two, long_transfer, CRd, option);
     if (!action) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
-    CallCoprocCallback(code, ctx, *action, nullptr, args[1]);
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+    CallCoprocCallback(code, ctx, *action, nullptr, args[2]);
 }
 
 template<>
 void EmitIR<IR::Opcode::A32CoprocStoreWords>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const bool long_transfer = coproc_info[2] != 0;
@@ -283,17 +293,18 @@ void EmitIR<IR::Opcode::A32CoprocStoreWords>(oaknut::CodeGenerator& code, EmitCo
 
     std::shared_ptr<A32::Coprocessor> coproc = ctx.conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileStoreWords(two, long_transfer, CRd, option);
     if (!action) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
-    CallCoprocCallback(code, ctx, *action, nullptr, args[1]);
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+    CallCoprocCallback(code, ctx, *action, nullptr, args[2]);
 }
 
 }  // namespace Dynarmic::Backend::Arm64

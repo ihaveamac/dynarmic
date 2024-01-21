@@ -370,7 +370,7 @@ void IREmitter::CoprocInternalOperation(size_t coproc_no, bool two, size_t opc1,
                                                  static_cast<u8>(CRn),
                                                  static_cast<u8>(CRm),
                                                  static_cast<u8>(opc2)};
-    Inst(Opcode::A32CoprocInternalOperation, IR::Value(coproc_info));
+    Inst(Opcode::A32CoprocInternalOperation, ImmCurrentLocationDescriptor(), IR::Value(coproc_info));
 }
 
 void IREmitter::CoprocSendOneWord(size_t coproc_no, bool two, size_t opc1, CoprocReg CRn, CoprocReg CRm, size_t opc2, const IR::U32& word) {
@@ -381,7 +381,7 @@ void IREmitter::CoprocSendOneWord(size_t coproc_no, bool two, size_t opc1, Copro
                                                  static_cast<u8>(CRn),
                                                  static_cast<u8>(CRm),
                                                  static_cast<u8>(opc2)};
-    Inst(Opcode::A32CoprocSendOneWord, IR::Value(coproc_info), word);
+    Inst(Opcode::A32CoprocSendOneWord, ImmCurrentLocationDescriptor(), IR::Value(coproc_info), word);
 }
 
 void IREmitter::CoprocSendTwoWords(size_t coproc_no, bool two, size_t opc, CoprocReg CRm, const IR::U32& word1, const IR::U32& word2) {
@@ -390,7 +390,7 @@ void IREmitter::CoprocSendTwoWords(size_t coproc_no, bool two, size_t opc, Copro
                                                  static_cast<u8>(two ? 1 : 0),
                                                  static_cast<u8>(opc),
                                                  static_cast<u8>(CRm)};
-    Inst(Opcode::A32CoprocSendTwoWords, IR::Value(coproc_info), word1, word2);
+    Inst(Opcode::A32CoprocSendTwoWords, ImmCurrentLocationDescriptor(), IR::Value(coproc_info), word1, word2);
 }
 
 IR::U32 IREmitter::CoprocGetOneWord(size_t coproc_no, bool two, size_t opc1, CoprocReg CRn, CoprocReg CRm, size_t opc2) {
@@ -401,7 +401,7 @@ IR::U32 IREmitter::CoprocGetOneWord(size_t coproc_no, bool two, size_t opc1, Cop
                                                  static_cast<u8>(CRn),
                                                  static_cast<u8>(CRm),
                                                  static_cast<u8>(opc2)};
-    return Inst<IR::U32>(Opcode::A32CoprocGetOneWord, IR::Value(coproc_info));
+    return Inst<IR::U32>(Opcode::A32CoprocGetOneWord, ImmCurrentLocationDescriptor(), IR::Value(coproc_info));
 }
 
 IR::U64 IREmitter::CoprocGetTwoWords(size_t coproc_no, bool two, size_t opc, CoprocReg CRm) {
@@ -410,7 +410,7 @@ IR::U64 IREmitter::CoprocGetTwoWords(size_t coproc_no, bool two, size_t opc, Cop
                                                  static_cast<u8>(two ? 1 : 0),
                                                  static_cast<u8>(opc),
                                                  static_cast<u8>(CRm)};
-    return Inst<IR::U64>(Opcode::A32CoprocGetTwoWords, IR::Value(coproc_info));
+    return Inst<IR::U64>(Opcode::A32CoprocGetTwoWords, ImmCurrentLocationDescriptor(), IR::Value(coproc_info));
 }
 
 void IREmitter::CoprocLoadWords(size_t coproc_no, bool two, bool long_transfer, CoprocReg CRd, const IR::U32& address, bool has_option, u8 option) {
@@ -421,7 +421,7 @@ void IREmitter::CoprocLoadWords(size_t coproc_no, bool two, bool long_transfer, 
                                                  static_cast<u8>(CRd),
                                                  static_cast<u8>(has_option ? 1 : 0),
                                                  static_cast<u8>(option)};
-    Inst(Opcode::A32CoprocLoadWords, IR::Value(coproc_info), address);
+    Inst(Opcode::A32CoprocLoadWords, ImmCurrentLocationDescriptor(), IR::Value(coproc_info), address);
 }
 
 void IREmitter::CoprocStoreWords(size_t coproc_no, bool two, bool long_transfer, CoprocReg CRd, const IR::U32& address, bool has_option, u8 option) {
@@ -432,7 +432,7 @@ void IREmitter::CoprocStoreWords(size_t coproc_no, bool two, bool long_transfer,
                                                  static_cast<u8>(CRd),
                                                  static_cast<u8>(has_option ? 1 : 0),
                                                  static_cast<u8>(option)};
-    Inst(Opcode::A32CoprocStoreWords, IR::Value(coproc_info), address);
+    Inst(Opcode::A32CoprocStoreWords, ImmCurrentLocationDescriptor(), IR::Value(coproc_info), address);
 }
 
 IR::U64 IREmitter::ImmCurrentLocationDescriptor() {

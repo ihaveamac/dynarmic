@@ -843,8 +843,26 @@ void A32EmitX64::EmitA32SetFpscrNZCV(A32EmitContext& ctx, IR::Inst* inst) {
     code.mov(dword[r15 + offsetof(A32JitState, fpsr_nzcv)], value);
 }
 
-static void EmitCoprocessorException() {
-    ASSERT_FALSE("Should raise coproc exception here");
+static void EmitCoprocessorException(BlockOfCode& code, A32EmitContext& ctx, IR::Inst* inst) {
+    code.SwitchMxcsrOnExit();
+
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+    ctx.reg_alloc.HostCall(nullptr);
+
+    const A32::LocationDescriptor current_location{IR::LocationDescriptor{args[0].GetImmediateU64()}};
+
+    const u32 pc = current_location.PC();
+    const u64 exception = static_cast<u32>(A32::Exception::InvalidCoprocessorInstruction);
+    Devirtualize<&A32::UserCallbacks::ExceptionRaised>(ctx.conf.callbacks).EmitCall(code, [&](RegList param) {
+        code.mov(param[0], pc);
+        code.mov(param[1], exception);
+    });
+
+    if (inst->GetType() != IR::Type::Void) {
+        ctx.reg_alloc.DefineValue(inst, rax);  // Fake value.
+    }
+
+    code.SwitchMxcsrOnEntry();
 }
 
 static void CallCoprocCallback(BlockOfCode& code, RegAlloc& reg_alloc, A32::Coprocessor::Callback callback, IR::Inst* inst = nullptr, std::optional<Argument::copyable_reference> arg0 = {}, std::optional<Argument::copyable_reference> arg1 = {}) {
@@ -858,7 +876,7 @@ static void CallCoprocCallback(BlockOfCode& code, RegAlloc& reg_alloc, A32::Copr
 }
 
 void A32EmitX64::EmitA32CoprocInternalOperation(A32EmitContext& ctx, IR::Inst* inst) {
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const auto opc1 = static_cast<unsigned>(coproc_info[2]);
@@ -869,13 +887,13 @@ void A32EmitX64::EmitA32CoprocInternalOperation(A32EmitContext& ctx, IR::Inst* i
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileInternalOperation(two, opc1, CRd, CRn, CRm, opc2);
     if (!action) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
@@ -883,8 +901,7 @@ void A32EmitX64::EmitA32CoprocInternalOperation(A32EmitContext& ctx, IR::Inst* i
 }
 
 void A32EmitX64::EmitA32CoprocSendOneWord(A32EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const auto opc1 = static_cast<unsigned>(coproc_info[2]);
@@ -894,24 +911,26 @@ void A32EmitX64::EmitA32CoprocSendOneWord(A32EmitContext& ctx, IR::Inst* inst) {
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileSendOneWord(two, opc1, CRn, CRm, opc2);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+
     if (const auto cb = std::get_if<A32::Coprocessor::Callback>(&action)) {
-        CallCoprocCallback(code, ctx.reg_alloc, *cb, nullptr, args[1]);
+        CallCoprocCallback(code, ctx.reg_alloc, *cb, nullptr, args[2]);
         return;
     }
 
     if (const auto destination_ptr = std::get_if<u32*>(&action)) {
-        const Xbyak::Reg32 reg_word = ctx.reg_alloc.UseGpr(args[1]).cvt32();
+        const Xbyak::Reg32 reg_word = ctx.reg_alloc.UseGpr(args[2]).cvt32();
         const Xbyak::Reg64 reg_destination_addr = ctx.reg_alloc.ScratchGpr();
 
         code.mov(reg_destination_addr, reinterpret_cast<u64>(*destination_ptr));
@@ -924,9 +943,7 @@ void A32EmitX64::EmitA32CoprocSendOneWord(A32EmitContext& ctx, IR::Inst* inst) {
 }
 
 void A32EmitX64::EmitA32CoprocSendTwoWords(A32EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const auto opc = static_cast<unsigned>(coproc_info[2]);
@@ -934,25 +951,27 @@ void A32EmitX64::EmitA32CoprocSendTwoWords(A32EmitContext& ctx, IR::Inst* inst) 
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileSendTwoWords(two, opc, CRm);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+
     if (const auto cb = std::get_if<A32::Coprocessor::Callback>(&action)) {
-        CallCoprocCallback(code, ctx.reg_alloc, *cb, nullptr, args[1], args[2]);
+        CallCoprocCallback(code, ctx.reg_alloc, *cb, nullptr, args[2], args[3]);
         return;
     }
 
     if (const auto destination_ptrs = std::get_if<std::array<u32*, 2>>(&action)) {
-        const Xbyak::Reg32 reg_word1 = ctx.reg_alloc.UseGpr(args[1]).cvt32();
-        const Xbyak::Reg32 reg_word2 = ctx.reg_alloc.UseGpr(args[2]).cvt32();
+        const Xbyak::Reg32 reg_word1 = ctx.reg_alloc.UseGpr(args[2]).cvt32();
+        const Xbyak::Reg32 reg_word2 = ctx.reg_alloc.UseGpr(args[3]).cvt32();
         const Xbyak::Reg64 reg_destination_addr = ctx.reg_alloc.ScratchGpr();
 
         code.mov(reg_destination_addr, reinterpret_cast<u64>((*destination_ptrs)[0]));
@@ -967,7 +986,7 @@ void A32EmitX64::EmitA32CoprocSendTwoWords(A32EmitContext& ctx, IR::Inst* inst) 
 }
 
 void A32EmitX64::EmitA32CoprocGetOneWord(A32EmitContext& ctx, IR::Inst* inst) {
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
 
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
@@ -978,14 +997,14 @@ void A32EmitX64::EmitA32CoprocGetOneWord(A32EmitContext& ctx, IR::Inst* inst) {
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileGetOneWord(two, opc1, CRn, CRm, opc2);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
@@ -1010,7 +1029,7 @@ void A32EmitX64::EmitA32CoprocGetOneWord(A32EmitContext& ctx, IR::Inst* inst) {
 }
 
 void A32EmitX64::EmitA32CoprocGetTwoWords(A32EmitContext& ctx, IR::Inst* inst) {
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const unsigned opc = coproc_info[2];
@@ -1018,14 +1037,14 @@ void A32EmitX64::EmitA32CoprocGetTwoWords(A32EmitContext& ctx, IR::Inst* inst) {
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     auto action = coproc->CompileGetTwoWords(two, opc, CRm);
 
     if (std::holds_alternative<std::monostate>(action)) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
@@ -1055,9 +1074,7 @@ void A32EmitX64::EmitA32CoprocGetTwoWords(A32EmitContext& ctx, IR::Inst* inst) {
 }
 
 void A32EmitX64::EmitA32CoprocLoadWords(A32EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const bool long_transfer = coproc_info[2] != 0;
@@ -1071,23 +1088,22 @@ void A32EmitX64::EmitA32CoprocLoadWords(A32EmitContext& ctx, IR::Inst* inst) {
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileLoadWords(two, long_transfer, CRd, option);
     if (!action) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
-    CallCoprocCallback(code, ctx.reg_alloc, *action, nullptr, args[1]);
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+    CallCoprocCallback(code, ctx.reg_alloc, *action, nullptr, args[2]);
 }
 
 void A32EmitX64::EmitA32CoprocStoreWords(A32EmitContext& ctx, IR::Inst* inst) {
-    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-
-    const auto coproc_info = inst->GetArg(0).GetCoprocInfo();
+    const auto coproc_info = inst->GetArg(1).GetCoprocInfo();
     const size_t coproc_num = coproc_info[0];
     const bool two = coproc_info[1] != 0;
     const bool long_transfer = coproc_info[2] != 0;
@@ -1101,17 +1117,18 @@ void A32EmitX64::EmitA32CoprocStoreWords(A32EmitContext& ctx, IR::Inst* inst) {
 
     std::shared_ptr<A32::Coprocessor> coproc = conf.coprocessors[coproc_num];
     if (!coproc) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
     const auto action = coproc->CompileStoreWords(two, long_transfer, CRd, option);
     if (!action) {
-        EmitCoprocessorException();
+        EmitCoprocessorException(code, ctx, inst);
         return;
     }
 
-    CallCoprocCallback(code, ctx.reg_alloc, *action, nullptr, args[1]);
+    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+    CallCoprocCallback(code, ctx.reg_alloc, *action, nullptr, args[2]);
 }
 
 std::string A32EmitX64::LocationDescriptorToFriendlyName(const IR::LocationDescriptor& ir_descriptor) const {

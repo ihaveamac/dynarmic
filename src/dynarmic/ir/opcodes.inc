@@ -756,12 +756,12 @@ A64OPC(ExclusiveWriteMemory64,                              U32,            U64,
 A64OPC(ExclusiveWriteMemory128,                             U32,            U64,            U64,            U128,           AccType         )
 
 // Coprocessor
-A32OPC(CoprocInternalOperation,                             Void,           CoprocInfo                                                      )
-A32OPC(CoprocSendOneWord,                                   Void,           CoprocInfo,     U32                                             )
-A32OPC(CoprocSendTwoWords,                                  Void,           CoprocInfo,     U32,            U32                             )
-A32OPC(CoprocGetOneWord,                                    U32,            CoprocInfo                                                      )
-A32OPC(CoprocGetTwoWords,                                   U64,            CoprocInfo                                                      )
-A32OPC(CoprocLoadWords,                                     Void,           CoprocInfo,     U32                                             )
-A32OPC(CoprocStoreWords,                                    Void,           CoprocInfo,     U32                                             )
+A32OPC(CoprocInternalOperation,                             Void,           U64,            CoprocInfo                                      )
+A32OPC(CoprocSendOneWord,                                   Void,           U64,            CoprocInfo,     U32                             )
+A32OPC(CoprocSendTwoWords,                                  Void,           U64,            CoprocInfo,     U32,            U32             )
+A32OPC(CoprocGetOneWord,                                    U32,            U64,            CoprocInfo                                      )
+A32OPC(CoprocGetTwoWords,                                   U64,            U64,            CoprocInfo                                      )
+A32OPC(CoprocLoadWords,                                     Void,           U64,            CoprocInfo,     U32                             )
+A32OPC(CoprocStoreWords,                                    Void,           U64,            CoprocInfo,     U32                             )
 
 // clang-format on
