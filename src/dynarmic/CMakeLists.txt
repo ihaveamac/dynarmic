@@ -257,7 +257,6 @@ if ("A64" IN_LIST DYNARMIC_FRONTENDS)
         interface/A64/config.h
         ir/opt/a64_callback_config_pass.cpp
         ir/opt/a64_get_set_elimination_pass.cpp
-        ir/opt/a64_merge_interpret_blocks.cpp
     )
 endif()
 

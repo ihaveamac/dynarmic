@@ -287,9 +287,6 @@ private:
             Optimization::ConstantPropagation(ir_block);
             Optimization::DeadCodeElimination(ir_block);
         }
-        if (conf.HasOptimization(OptimizationFlag::MiscIROpt)) {
-            Optimization::A64MergeInterpretBlocksPass(ir_block, conf.callbacks);
-        }
         Optimization::VerificationPass(ir_block);
         return emitter.Emit(ir_block).entrypoint;
     }

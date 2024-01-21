@@ -27,7 +27,7 @@ IR::Block Translate(LocationDescriptor descriptor, MemoryReadCodeFuncType memory
             if (auto decoder = Decode<TranslatorVisitor>(*instruction)) {
                 should_continue = decoder->get().call(visitor, *instruction);
             } else {
-                should_continue = visitor.InterpretThisInstruction();
+                should_continue = visitor.UnallocatedEncoding();
             }
         } else {
             should_continue = visitor.RaiseException(Exception::NoExecuteFault);
@@ -55,7 +55,7 @@ bool TranslateSingleInstruction(IR::Block& block, LocationDescriptor descriptor,
     if (auto decoder = Decode<TranslatorVisitor>(instruction)) {
         should_continue = decoder->get().call(visitor, instruction);
     } else {
-        should_continue = visitor.InterpretThisInstruction();
+        should_continue = visitor.UnallocatedEncoding();
     }
 
     visitor.ir.current_location = visitor.ir.current_location->AdvancePC(4);

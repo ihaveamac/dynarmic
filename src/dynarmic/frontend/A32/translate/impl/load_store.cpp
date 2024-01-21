@@ -866,11 +866,11 @@ bool TranslatorVisitor::arm_LDMIB(Cond cond, bool W, Reg n, RegList list) {
 }
 
 bool TranslatorVisitor::arm_LDM_usr() {
-    return InterpretThisInstruction();
+    return UndefinedInstruction();  // TODO
 }
 
 bool TranslatorVisitor::arm_LDM_eret() {
-    return InterpretThisInstruction();
+    return UndefinedInstruction();  // TODO
 }
 
 static bool STMHelper(A32::IREmitter& ir, bool W, Reg n, RegList list, IR::U32 start_address, IR::U32 writeback_address) {
@@ -951,7 +951,7 @@ bool TranslatorVisitor::arm_STMIB(Cond cond, bool W, Reg n, RegList list) {
 }
 
 bool TranslatorVisitor::arm_STM_usr() {
-    return InterpretThisInstruction();
+    return UndefinedInstruction();  // TODO
 }
 
 }  // namespace Dynarmic::A32

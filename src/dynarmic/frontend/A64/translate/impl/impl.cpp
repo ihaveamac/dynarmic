@@ -13,11 +13,6 @@
 
 namespace Dynarmic::A64 {
 
-bool TranslatorVisitor::InterpretThisInstruction() {
-    ir.SetTerm(IR::Term::Interpret(*ir.current_location));
-    return false;
-}
-
 bool TranslatorVisitor::UnpredictableInstruction() {
     return RaiseException(Exception::UnpredictableInstruction);
 }

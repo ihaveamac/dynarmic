@@ -17,17 +17,6 @@ namespace Term {
 struct Invalid {};
 
 /**
- * This terminal instruction calls the interpreter, starting at `next`.
- * The interpreter must interpret exactly `num_instructions` instructions.
- */
-struct Interpret {
-    explicit Interpret(const LocationDescriptor& next_)
-            : next(next_) {}
-    LocationDescriptor next;  ///< Location at which interpretation starts.
-    size_t num_instructions = 1;
-};
-
-/**
  * This terminal instruction returns control to the dispatcher.
  * The dispatcher will use the current cpu state to determine what comes next.
  */
@@ -80,7 +69,6 @@ struct CheckHalt;
 /// A Terminal is the terminal instruction in a MicroBlock.
 using Terminal = boost::variant<
     Invalid,
-    Interpret,
     ReturnToDispatch,
     LinkBlock,
     LinkBlockFast,

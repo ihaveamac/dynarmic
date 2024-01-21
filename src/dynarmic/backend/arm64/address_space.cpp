@@ -29,8 +29,6 @@ void AppendNextBlocksToList(std::list<IR::LocationDescriptor>& next, const IR::T
         using T = std::decay_t<decltype(x)>;
         if constexpr (std::is_same_v<T, IR::Term::Invalid>) {
             ASSERT_FALSE("Invalid terminal");
-        } else if constexpr (std::is_same_v<T, IR::Term::Interpret>) {
-            // Nothing
         } else if constexpr (std::is_same_v<T, IR::Term::ReturnToDispatch>) {
             // Nothing
         } else if constexpr (std::is_same_v<T, IR::Term::LinkBlock>) {

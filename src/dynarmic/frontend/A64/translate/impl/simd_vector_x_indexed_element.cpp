@@ -221,7 +221,7 @@ bool TranslatorVisitor::FCMLA_elt(bool Q, Imm<2> size, Imm<1> L, Imm<1> M, Imm<4
 
     // TODO: We don't support the half-precision floating point variant yet.
     if (esize == 16) {
-        return InterpretThisInstruction();
+        return UnallocatedEncoding();  // TODO
     }
 
     const size_t index = [=] {

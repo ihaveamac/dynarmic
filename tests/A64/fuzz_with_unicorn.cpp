@@ -39,8 +39,6 @@ static bool ShouldTestInst(u32 instruction, u64 pc, bool is_last_inst) {
     bool should_continue = A64::TranslateSingleInstruction(block, location, instruction);
     if (!should_continue && !is_last_inst)
         return false;
-    if (auto terminal = block.GetTerminal(); boost::get<IR::Term::Interpret>(&terminal))
-        return false;
     for (const auto& ir_inst : block) {
         switch (ir_inst.GetOpcode()) {
         case IR::Opcode::A64ExceptionRaised:

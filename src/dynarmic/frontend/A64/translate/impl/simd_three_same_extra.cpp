@@ -64,7 +64,7 @@ bool TranslatorVisitor::FCMLA_vec(bool Q, Imm<2> size, Vec Vm, Imm<2> rot, Vec V
 
     // TODO: Currently we don't support half-precision floating point
     if (esize == 16) {
-        return InterpretThisInstruction();
+        return UnallocatedEncoding();  // TODO
     }
 
     const size_t datasize = Q ? 128 : 64;
@@ -135,7 +135,7 @@ bool TranslatorVisitor::FCADD_vec(bool Q, Imm<2> size, Vec Vm, Imm<1> rot, Vec V
 
     // TODO: Currently we don't support half-precision floating point
     if (esize == 16) {
-        return InterpretThisInstruction();
+        return UnallocatedEncoding();  // TODO
     }
 
     const size_t datasize = Q ? 128 : 64;

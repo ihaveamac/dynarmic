@@ -26,6 +26,8 @@ public:
     std::map<u64, u8> modified_memory;
     std::vector<std::string> interrupts;
 
+    bool do_assert = true;
+
     bool IsInCodeMem(u64 vaddr) const {
         return vaddr >= code_mem_start_address && vaddr < code_mem_start_address + code_mem.size() * 4;
     }
@@ -105,11 +107,9 @@ public:
         return true;
     }
 
-    void InterpreterFallback(u64 pc, size_t num_instructions) override { ASSERT_MSG(false, "InterpreterFallback({:016x}, {})", pc, num_instructions); }
+    void CallSVC(std::uint32_t swi) override { ASSERT_MSG(!do_assert, "CallSVC({})", swi); }
 
-    void CallSVC(std::uint32_t swi) override { ASSERT_MSG(false, "CallSVC({})", swi); }
-
-    void ExceptionRaised(u64 pc, Dynarmic::A64::Exception /*exception*/) override { ASSERT_MSG(false, "ExceptionRaised({:016x})", pc); }
+    void ExceptionRaised(u64 pc, Dynarmic::A64::Exception /*exception*/) override { ASSERT_MSG(!do_assert, "ExceptionRaised({:016x})", pc); }
 
     void AddTicks(std::uint64_t ticks) override {
         if (ticks > ticks_left) {
@@ -201,8 +201,6 @@ public:
         MemoryWrite128(vaddr, value);
         return true;
     }
-
-    void InterpreterFallback(u64 pc, size_t num_instructions) override { ASSERT_MSG(false, "InterpreterFallback({:016x}, {})", pc, num_instructions); }
 
     void CallSVC(std::uint32_t swi) override { ASSERT_MSG(false, "CallSVC({})", swi); }
 

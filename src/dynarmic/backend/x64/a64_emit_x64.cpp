@@ -595,16 +595,6 @@ std::string A64EmitX64::LocationDescriptorToFriendlyName(const IR::LocationDescr
                        descriptor.FPCR().Value());
 }
 
-void A64EmitX64::EmitTerminalImpl(IR::Term::Interpret terminal, IR::LocationDescriptor, bool) {
-    code.SwitchMxcsrOnExit();
-    Devirtualize<&A64::UserCallbacks::InterpreterFallback>(conf.callbacks).EmitCall(code, [&](RegList param) {
-        code.mov(param[0], A64::LocationDescriptor{terminal.next}.PC());
-        code.mov(qword[r15 + offsetof(A64JitState, pc)], param[0]);
-        code.mov(param[1].cvt32(), terminal.num_instructions);
-    });
-    code.ReturnFromRunCode(true);  // TODO: Check cycles
-}
-
 void A64EmitX64::EmitTerminalImpl(IR::Term::ReturnToDispatch, IR::LocationDescriptor, bool) {
     code.ReturnFromRunCode();
 }

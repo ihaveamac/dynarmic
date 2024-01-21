@@ -24,7 +24,6 @@ struct TranslatorVisitor final {
     A64::IREmitter ir;
     TranslationOptions options;
 
-    bool InterpretThisInstruction();
     bool UnpredictableInstruction();
     bool DecodeError();
     bool ReservedValue();

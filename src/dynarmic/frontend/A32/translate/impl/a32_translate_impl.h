@@ -36,7 +36,6 @@ struct TranslatorVisitor final {
     bool ThumbConditionPassed();
     bool VFPConditionPassed(Cond cond);
 
-    bool InterpretThisInstruction();
     bool UnpredictableInstruction();
     bool UndefinedInstruction();
     bool DecodeError();

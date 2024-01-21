@@ -37,6 +37,7 @@ public:
     std::vector<InstructionType> code_mem;
     std::map<u32, u8> modified_memory;
     std::vector<std::string> interrupts;
+    bool do_assert = true;
 
     void PadCodeMem() {
         do {
@@ -95,11 +96,9 @@ public:
         MemoryWrite32(vaddr + 4, static_cast<u32>(value >> 32));
     }
 
-    void InterpreterFallback(u32 pc, size_t num_instructions) override { ASSERT_MSG(false, "InterpreterFallback({:08x}, {}) code = {:08x}", pc, num_instructions, *MemoryReadCode(pc)); }
+    void CallSVC(std::uint32_t swi) override { ASSERT_MSG(!do_assert, "CallSVC({})", swi); }
 
-    void CallSVC(std::uint32_t swi) override { ASSERT_MSG(false, "CallSVC({})", swi); }
-
-    void ExceptionRaised(u32 pc, Dynarmic::A32::Exception /*exception*/) override { ASSERT_MSG(false, "ExceptionRaised({:08x}) code = {:08x}", pc, *MemoryReadCode(pc)); }
+    void ExceptionRaised(u32 pc, Dynarmic::A32::Exception /*exception*/) override { ASSERT_MSG(!do_assert, "ExceptionRaised({:08x}) code = {:08x}", pc, *MemoryReadCode(pc)); }
 
     void AddTicks(std::uint64_t ticks) override {
         if (ticks > ticks_left) {
@@ -181,8 +180,6 @@ public:
         MemoryWrite64(vaddr, value);
         return true;
     }
-
-    void InterpreterFallback(std::uint32_t pc, size_t num_instructions) override { ASSERT_MSG(false, "InterpreterFallback({:016x}, {})", pc, num_instructions); }
 
     void CallSVC(std::uint32_t swi) override { ASSERT_MSG(false, "CallSVC({})", swi); }
 

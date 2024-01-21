@@ -1140,19 +1140,6 @@ std::string A32EmitX64::LocationDescriptorToFriendlyName(const IR::LocationDescr
                        descriptor.FPSCR().Value());
 }
 
-void A32EmitX64::EmitTerminalImpl(IR::Term::Interpret terminal, IR::LocationDescriptor initial_location, bool) {
-    ASSERT_MSG(A32::LocationDescriptor{terminal.next}.TFlag() == A32::LocationDescriptor{initial_location}.TFlag(), "Unimplemented");
-    ASSERT_MSG(A32::LocationDescriptor{terminal.next}.EFlag() == A32::LocationDescriptor{initial_location}.EFlag(), "Unimplemented");
-    ASSERT_MSG(terminal.num_instructions == 1, "Unimplemented");
-
-    code.mov(code.ABI_PARAM2.cvt32(), A32::LocationDescriptor{terminal.next}.PC());
-    code.mov(code.ABI_PARAM3.cvt32(), 1);
-    code.mov(MJitStateReg(A32::Reg::PC), code.ABI_PARAM2.cvt32());
-    code.SwitchMxcsrOnExit();
-    Devirtualize<&A32::UserCallbacks::InterpreterFallback>(conf.callbacks).EmitCall(code);
-    code.ReturnFromRunCode(true);  // TODO: Check cycles
-}
-
 void A32EmitX64::EmitTerminalImpl(IR::Term::ReturnToDispatch, IR::LocationDescriptor, bool) {
     code.ReturnFromRunCode();
 }
