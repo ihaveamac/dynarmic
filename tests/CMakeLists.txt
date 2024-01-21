@@ -16,6 +16,7 @@ if ("A32" IN_LIST DYNARMIC_FRONTENDS)
         A32/test_svc.cpp
         A32/test_thumb_instructions.cpp
         A32/testenv.h
+        A32/try_all_instructions.cpp
         decoder_tests.cpp
     )
 endif()

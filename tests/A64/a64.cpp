@@ -1742,3 +1742,25 @@ TEST_CASE("A64: {S,U}MINP.H, {S,U}MAXP.H", "[a64]") {
     CHECK(jit.GetVector(8) == vectors[8]);
     CHECK(jit.GetVector(9) == vectors[9]);
 }
+
+TEST_CASE("A64: try all instructions", "[a64][.]") {
+    A64TestEnv test_env;
+    A64::UserConfig conf{&test_env};
+    ExclusiveMonitor monitor{1};
+    conf.global_monitor = &monitor;
+    conf.processor_id = 0;
+    A64::Jit jit{conf};
+
+    for (u64 inst = 0; inst < 0x1'0000'0000; inst++) {
+        test_env.do_assert = false;
+        test_env.code_mem.clear();
+        test_env.code_mem.emplace_back(static_cast<u32>(inst));
+        jit.SetFpcr(0);
+        jit.SetPC(0);
+        test_env.ticks_left = 1;
+        jit.ClearCache();
+        jit.Run();
+        if (inst % 1000 == 0)
+            std::printf("%08llx\r", inst);
+    }
+}
